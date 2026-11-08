@@ -26,6 +26,8 @@ use crate::theme::{self, Palette};
 // Desktop shell integration is kept outside the shared app implementation.
 #[path = "app/desktop_resident.rs"]
 mod desktop_resident;
+#[path = "app/desktop_services.rs"]
+mod desktop_services;
 
 /// The notice a failed attachment download shows, in the chat bubble and in
 /// the viewer alike: an expired file has a name of its own.
@@ -908,7 +910,8 @@ pub struct App {
     /// Whether ZapFast starts at login, when this installation supports it.
     pub start_with_system: Option<bool>,
     /// The read or change of the login item running on its thread.
-    login_item: crate::autostart::LoginItem,
+    // Services whose implementations belong to the desktop host.
+    desktop_services: desktop_services::DesktopServices,
     /// Cross-thread window repaint handle.
     waker: Waker,
     tray: Option<fastframe_tray::Tray>,
@@ -929,7 +932,7 @@ pub struct App {
     tray_colour_checked: Option<Instant>,
     /// Sleep and wake as the system reports them. Tests and demo runs get a
     /// fixed one that reads nothing from the machine.
-    power: fastframe_power::Power,
+
     /// The desktop portal's light or dark preference, which winit does not
     /// report on Linux. Tests and demo runs read none.
     #[cfg(target_os = "linux")]
@@ -1412,7 +1415,7 @@ impl App {
             .spawn(move || crate::theme::follow_text_rendering(move || text_waker.wake()))
             .ok();
         let power_waker = waker.clone();
-        self.power = fastframe_power::Power::spawn(move || power_waker.wake());
+        self.desktop_services.power = fastframe_power::Power::spawn(move || power_waker.wake());
         #[cfg(target_os = "linux")]
         {
             let appearance_waker = waker.clone();
@@ -1435,7 +1438,7 @@ impl App {
             })
             .ok();
         let login_waker = waker.clone();
-        self.login_item.read(move || login_waker.wake());
+        self.desktop_services.login_item.read(move || login_waker.wake());
     }
 
     /// Single-instance guard used by later launches.
@@ -1731,7 +1734,7 @@ impl App {
             call_member_frames: HashMap::new(),
             call_member_textures: HashMap::new(),
             start_with_system: None,
-            login_item: Default::default(),
+            desktop_services: desktop_services::DesktopServices::default(),
             waker,
             tray: None,
             tray_allowed: false,
@@ -1741,7 +1744,7 @@ impl App {
             wants_focus: false,
             account_wheeled: None,
             tray_colour_checked: None,
-            power: fastframe_power::Power::fixed(Default::default()),
+
             #[cfg(target_os = "linux")]
             system_appearance: None,
             #[cfg(test)]
@@ -9895,7 +9898,7 @@ impl App {
             }
             Action::SetStartWithSystem(enabled) => {
                 let waker = self.waker.clone();
-                self.login_item.set(enabled, move || waker.wake());
+                self.desktop_services.login_item.set(enabled, move || waker.wake());
             }
             Action::ZoomBy(delta) => {
                 self.settings.zoom = (self.settings.zoom + delta).clamp(0.6, 2.0);
@@ -15694,7 +15697,7 @@ mod tests {
         let mut app = app();
         let (backend, mut commands) = Backend::recording();
         app.backend = backend;
-        app.power.send(fastframe_power::Event::Resumed);
+        app.desktop_services.power.send(fastframe_power::Event::Resumed);
         app.handle_power();
         assert!(matches!(commands.try_recv(), Ok(Command::Resumed)));
         assert!(commands.try_recv().is_err(), "once per wake");

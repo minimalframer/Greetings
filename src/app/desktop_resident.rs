@@ -17,7 +17,7 @@ impl App {
     /// Shared notification and presence logic consumes this narrow signal
     /// rather than depending directly on the desktop power service.
     pub(super) fn desktop_display_off(&self) -> bool {
-        self.power.conditions().display_off
+        self.desktop_services.power.conditions().display_off
     }
 
     /// Highlights the taskbar entry for a message that notified while the
@@ -57,7 +57,7 @@ impl App {
 
 
     fn tick_login_item(&mut self) {
-        let Some(outcome) = self.login_item.poll() else {
+        let Some(outcome) = self.desktop_services.login_item.poll() else {
             return;
         };
         match outcome.state {
