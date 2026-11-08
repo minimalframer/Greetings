@@ -22,7 +22,6 @@ impl App {
         self.actions.extend(crate::macos::drain(self.window_hidden));
         self.handle_control_commands();
         self.poll_custom_themes();
-        self.sync_badge();
     }
 }
 
