@@ -45,6 +45,9 @@ jobs:
         with:
           targets: aarch64-linux-android
 
+      - name: Ensure Android Rust target is installed
+        run: rustup target add aarch64-linux-android
+
       - name: Configure Android NDK compiler
         shell: bash
         run: |
