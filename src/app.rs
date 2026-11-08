@@ -10398,20 +10398,14 @@ impl App {
             self.window_focused = false;
         }
         self.tick_app_lock(ctx);
-        self.tick_login_item();
         // Nobody reads behind the lock screen: messages stay unread, the
         // phone keeps notifying, and notifications here say nothing.
         if self.app_lock.is_locked() {
             self.window_focused = false;
         }
         self.report_presence();
-        self.handle_power();
         self.track_focus(ctx, Instant::now());
-        self.handle_tray();
-        #[cfg(target_os = "macos")]
-        self.actions.extend(crate::macos::drain(self.window_hidden));
-        self.handle_control_commands();
-        self.poll_custom_themes();
+        self.handle_desktop_frame();
         let wallpaper = self.account().settings.wallpaper_image.clone();
         self.wallpaper_image.sync(wallpaper.as_deref(), &self.waker);
         self.handle_notification_opens();
@@ -10429,7 +10423,6 @@ impl App {
         self.sync_prefetch();
         self.hold_media();
         self.follow_receipts();
-        self.sync_badge();
         self.request_attention(ctx);
     }
 
