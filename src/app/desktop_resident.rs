@@ -179,7 +179,7 @@ impl App {
     /// Offers "Lock ZapFast" in the tray exactly while an app lock password
     /// is set, so setting or removing one changes the menu at once, and
     /// makes the item when the setting that wants it is turned on.
-    fn sync_desktop_tray(&mut self) {
+    pub(super) fn sync_desktop_tray(&mut self) {
         if self.desktop_services.tray.is_none() {
             self.spawn_desktop_tray_if_wanted();
             if !self.window_hidden
