@@ -912,12 +912,10 @@ pub struct App {
     desktop_services: desktop_services::DesktopServices,
     /// Cross-thread window repaint handle.
     waker: Waker,
-    /// Dock clicks on macOS, which bring a closed window back with or without
     /// A new window asks for the focus with its first frame.
     wants_focus: bool,
     /// When the wheel last switched account.
     account_wheeled: Option<Instant>,
-    /// The desktop portal's light or dark preference, which winit does not
     /// Stands in for whether a panel shows the tray item, which tests cannot
     /// spawn.
     #[cfg(test)]
@@ -956,7 +954,6 @@ pub struct App {
     /// Chats and messages from clicked notifications.
     notification_opens: std::sync::Arc<std::sync::Mutex<Vec<crate::notify::NotificationTarget>>>,
     notifications: crate::notify::Notifications,
-    /// Unread count on the taskbar icon, where the desktop reads it. `None`
     /// The app lock: whether the window shows only the lock screen, the
     /// inactivity count, and the Settings password form.
     pub app_lock: crate::app_lock::AppLock,
