@@ -909,8 +909,6 @@ pub struct App {
     pub call_member_textures: HashMap<String, CallTexture>,
     /// Whether ZapFast starts at login, when this installation supports it.
     pub start_with_system: Option<bool>,
-    /// The read or change of the login item running on its thread.
-    // Services whose implementations belong to the desktop host.
     desktop_services: desktop_services::DesktopServices,
     /// Cross-thread window repaint handle.
     waker: Waker,
@@ -930,9 +928,6 @@ pub struct App {
     account_wheeled: Option<Instant>,
     /// When the panel's light or dark style was last read.
     tray_colour_checked: Option<Instant>,
-    /// Sleep and wake as the system reports them. Tests and demo runs get a
-    /// fixed one that reads nothing from the machine.
-
     /// The desktop portal's light or dark preference, which winit does not
     /// report on Linux. Tests and demo runs read none.
     #[cfg(target_os = "linux")]
@@ -1744,7 +1739,6 @@ impl App {
             wants_focus: false,
             account_wheeled: None,
             tray_colour_checked: None,
-
             #[cfg(target_os = "linux")]
             system_appearance: None,
             #[cfg(test)]
@@ -15704,7 +15698,7 @@ mod tests {
 
         app.settings_dirty = true;
         let ack = fastframe_power::Ack::default();
-        app.power.send(fastframe_power::Event::Suspending(ack));
+        app.desktop_services.power.send(fastframe_power::Event::Suspending(ack));
         app.handle_power();
         assert!(!app.settings_dirty, "saved before sleeping");
         assert!(commands.try_recv().is_err());
@@ -15748,7 +15742,7 @@ mod tests {
         app.mark_settings_dirty();
         app.account_mut().settings.history_prefetch = true;
         app.account_mut().mark_settings_dirty();
-        app.power.send(fastframe_power::Event::Suspending(
+        app.desktop_services.power.send(fastframe_power::Event::Suspending(
             fastframe_power::Ack::default(),
         ));
         app.handle_power();
@@ -19920,14 +19914,14 @@ mod tests {
         app.report_presence();
         assert!(matches!(commands.try_recv(), Ok(Command::SetOnline(true))));
 
-        app.power.set_conditions(fastframe_power::Conditions {
+        app.desktop_services.power.set_conditions(fastframe_power::Conditions {
             display_off: true,
             ..Default::default()
         });
         app.report_presence();
         assert!(matches!(commands.try_recv(), Ok(Command::SetOnline(false))));
 
-        app.power.set_conditions(Default::default());
+        app.desktop_services.power.set_conditions(Default::default());
         app.report_presence();
         assert!(matches!(commands.try_recv(), Ok(Command::SetOnline(true))));
         assert!(commands.try_recv().is_err());
@@ -26781,7 +26775,7 @@ mod app_lock_tests {
     fn messages_do_not_notify_while_the_display_is_off() {
         let mut app = unlocked_app();
         let message = incoming(&mut app);
-        app.power.set_conditions(fastframe_power::Conditions {
+        app.desktop_services.power.set_conditions(fastframe_power::Conditions {
             display_off: true,
             ..Default::default()
         });
@@ -26790,7 +26784,7 @@ mod app_lock_tests {
         assert!(app.notifications.shown.is_empty());
         assert!(!app.wants_attention);
 
-        app.power.set_conditions(Default::default());
+        app.desktop_services.power.set_conditions(Default::default());
         app.maybe_notify(CHAT, &message);
         assert_eq!(app.notifications.shown.len(), 1);
     }

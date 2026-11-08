@@ -37,7 +37,7 @@ impl App {
 
 
     fn handle_power(&mut self) {
-        for event in self.power.events() {
+        for event in self.desktop_services.power.events() {
             match event {
                 fastframe_power::Event::Suspending(ack)
                 | fastframe_power::Event::EndingSession(ack) => {

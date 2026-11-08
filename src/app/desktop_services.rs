@@ -4,7 +4,10 @@
 //! the desktop initializer replaces them with live process services.
 
 pub(super) struct DesktopServices {
+    /// The read or change of the login item running on its thread.
     pub(super) login_item: crate::autostart::LoginItem,
+    /// Sleep and wake as the system reports them. Tests and demo runs get a
+    /// fixed one that reads nothing from the machine.
     pub(super) power: fastframe_power::Power,
 }
 
