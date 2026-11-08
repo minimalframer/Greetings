@@ -13,6 +13,14 @@ categories = ["gui"]
 [lib]
 name = "zapfast"
 path = "src/lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []
+# Selects the eframe/winit Android GameActivity backend. The Android entry point
+# and desktop dependency isolation are separate porting steps; do not enable
+# this feature for desktop builds.
+android-game-activity = ["eframe/android-game-activity"]
 
 [[bin]]
 name = "zapfast"
