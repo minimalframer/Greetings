@@ -21,6 +21,8 @@ default = []
 # and desktop dependency isolation are separate porting steps; do not enable
 # this feature for desktop builds.
 android-game-activity = ["eframe/android-game-activity"]
+# Sample data, layout tests, and screenshots. Not used in release builds.
+demo = []
 
 [[bin]]
 name = "zapfast"
@@ -335,10 +337,6 @@ objc2-app-kit = { version = "0.3", default-features = false, features = ["NSMenu
 [[test]]
 name = "macos_menu"
 harness = false
-
-[features]
-# Sample data, layout tests, and screenshots. Not used in release builds.
-demo = []
 
 [profile.release]
 lto = "thin"
