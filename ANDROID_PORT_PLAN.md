@@ -40,10 +40,16 @@ Do not try to make the existing desktop binary run on Android by only adding an 
 
 ## Immediate blockers / next engineering tasks
 
-1. Inventory all platform-specific modules and dependencies.
-2. Confirm the exact Android support matrix for the pinned egui/winit and native crates.
-3. Define the Android package ID, minimum Android API level, and UI approach.
-4. Implement the first Android shell without changing the existing desktop entry point.
+Completed preparation:
+- The library now emits both `rlib` and `cdylib`, which is required for a native Android library artifact while retaining normal Rust library use.
+- Added an opt-in `android-game-activity` Cargo feature that forwards to eframe. It is not enabled by default, so desktop builds do not select an Android activity backend.
+
+Still required:
+1. Inventory all platform-specific modules and dependencies, then feature-gate desktop integrations without breaking desktop builds.
+2. Verify that the repository's pinned crmne/egui fork at the exact Cargo patch revision exposes the expected Android GameActivity feature and that the pinned winit fork links correctly.
+3. Add the Android activity entry point and Android project/manifest. GameActivity is the leading candidate because the app needs reliable soft-keyboard/text input; NativeActivity has known input-method limitations.
+4. Define the Android package ID, minimum Android API level, storage/keyring strategy, and media permission model.
+5. Build and test the Android target before adding CI or claiming APK support.
 
 ## Scope note
 
