@@ -6,7 +6,7 @@
 
 use std::time::Instant;
 
-use super::{App, TRAY_WAIT};
+use super::{hyprland, App, TRAY_WAIT};
 
 
 impl App {
