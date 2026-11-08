@@ -4,7 +4,9 @@
 //! still compiled for the desktop build; a later platform split can gate this
 //! module and replace it with an Android lifecycle host.
 
-use super::App;
+use std::time::Instant;
+
+use super::{App, TRAY_WAIT};
 
 /// The app outlives its window: closing it with "keep running" on hides
 /// ZapFast, and the tray, a notification or another launch brings it back.
