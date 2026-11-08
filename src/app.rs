@@ -1423,44 +1423,7 @@ impl App {
             .unwrap_or(0)
             .min(accounts.len() - 1);
         let mut app = Self::with_accounts(dirs, settings, roster, accounts, active, waker.clone());
-        app.pauses_media = true;
-        app.call_tones = crate::call_tones::Tones::new(true);
-        app.badge = Some(crate::notify::Badge::new(fastframe_desktop::desktop_entry(
-            "zapfast",
-        )));
-        app.custom_themes
-            .enable_desktop_themes(crate::theme::DESKTOP_THEMES);
-        app.load_custom_themes();
-        // Reading the desktop's font settings may wait on D-Bus; keep it off
-        // the first frame.
-        let text_waker = waker.clone();
-        std::thread::Builder::new()
-            .name("text-rendering".into())
-            .spawn(move || crate::theme::follow_text_rendering(move || text_waker.wake()))
-            .ok();
-        let power_waker = waker.clone();
-        app.power = fastframe_power::Power::spawn(move || power_waker.wake());
-        #[cfg(target_os = "linux")]
-        {
-            let appearance_waker = waker.clone();
-            app.system_appearance = Some(crate::appearance::SystemAppearance::spawn(move || {
-                appearance_waker.wake()
-            }));
-        }
-        app.tray_allowed = options.tray;
-        app.spawn_tray_if_wanted();
-        if cfg!(target_os = "macos") && options.tray {
-            let dock_waker = waker.clone();
-            app.dock = Some(fastframe_tray::Dock::spawn(move || dock_waker.wake()));
-        }
-        // The clock preference may wait on the desktop portal on Linux; keep
-        // it off the first frame.
-        std::thread::Builder::new()
-            .name("clock-format".into())
-            .spawn(|| {
-                crate::util::twelve_hour_clock();
-            })
-            .ok();
+        app.initialize_desktop_services(waker, options);
         let folder = app.settings.download_folder.clone();
         for account in &app.accounts {
             account
@@ -1470,10 +1433,58 @@ impl App {
                 app.settings.keep_chats_archived,
             ));
         }
-        let login_waker = waker.clone();
-        app.login_item.read(move || login_waker.wake());
         let _ = app.roster.save_to(&app.files, &app.dirs.accounts_file());
         Ok(app)
+    }
+
+    /// Starts process services owned by the desktop host.
+    ///
+    /// Kept separate from account/app-state construction so a mobile host can
+    /// provide its own lifecycle and platform services without starting a
+    /// desktop tray, Dock item, login item, or desktop appearance watchers.
+    /// This is an extraction boundary only: App still stores desktop service
+    /// types, so it is not yet an Android initializer.
+    fn initialize_desktop_services(&mut self, waker: &Waker, options: AppOptions) {
+        self.pauses_media = true;
+        self.call_tones = crate::call_tones::Tones::new(true);
+        self.badge = Some(crate::notify::Badge::new(fastframe_desktop::desktop_entry(
+            "zapfast",
+        )));
+        self.custom_themes
+            .enable_desktop_themes(crate::theme::DESKTOP_THEMES);
+        self.load_custom_themes();
+        // Reading the desktop's font settings may wait on D-Bus; keep it off
+        // the first frame.
+        let text_waker = waker.clone();
+        std::thread::Builder::new()
+            .name("text-rendering".into())
+            .spawn(move || crate::theme::follow_text_rendering(move || text_waker.wake()))
+            .ok();
+        let power_waker = waker.clone();
+        self.power = fastframe_power::Power::spawn(move || power_waker.wake());
+        #[cfg(target_os = "linux")]
+        {
+            let appearance_waker = waker.clone();
+            self.system_appearance = Some(crate::appearance::SystemAppearance::spawn(move || {
+                appearance_waker.wake()
+            }));
+        }
+        self.tray_allowed = options.tray;
+        self.spawn_tray_if_wanted();
+        if cfg!(target_os = "macos") && options.tray {
+            let dock_waker = waker.clone();
+            self.dock = Some(fastframe_tray::Dock::spawn(move || dock_waker.wake()));
+        }
+        // The clock preference may wait on the desktop portal on Linux; keep
+        // it off the first frame.
+        std::thread::Builder::new()
+            .name("clock-format".into())
+            .spawn(|| {
+                crate::util::twelve_hour_clock();
+            })
+            .ok();
+        let login_waker = waker.clone();
+        self.login_item.read(move || login_waker.wake());
     }
 
     /// Single-instance guard used by later launches.
