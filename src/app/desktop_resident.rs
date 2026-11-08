@@ -25,6 +25,47 @@ impl App {
         self.request_attention_on(ctx, skip);
     }
 
+
+    fn handle_power(&mut self) {
+        for event in self.power.events() {
+            match event {
+                fastframe_power::Event::Suspending(ack)
+                | fastframe_power::Event::EndingSession(ack) => {
+                    self.save_state();
+                    // Within the time the system waits for the app.
+                    self.files.flush(Duration::from_millis(1500));
+                    ack.done();
+                }
+                fastframe_power::Event::Resumed => {
+                    for account in &self.accounts {
+                        account.backend.send(Command::Resumed);
+                    }
+                }
+            }
+        }
+    }
+
+
+    fn tick_login_item(&mut self) {
+        let Some(outcome) = self.login_item.poll() else {
+            return;
+        };
+        match outcome.state {
+            Ok(state) => {
+                self.start_with_system = crate::autostart::switch(state);
+                if outcome.changed && matches!(state, fastframe_autostart::State::NeedsApproval(_))
+                {
+                    self.toast("Allow ZapFast in System Settings, under Login Items.");
+                }
+            }
+            Err(error) => {
+                if outcome.changed {
+                    self.toast_error(format!("Could not change the login item: {error}"));
+                }
+            }
+        }
+    }
+
     /// Runs integrations owned by the desktop host, outside shared frame work.
     ///
     /// Keeping these calls together gives the Android host a clear exclusion
