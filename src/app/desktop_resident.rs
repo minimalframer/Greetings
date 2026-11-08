@@ -196,3 +196,108 @@ impl fastframe_shell::Resident for App {
     }
 }
 
+
+
+    /// Starts or synchronizes the desktop tray and its menu-bar appearance.
+    ///
+    /// Kept in the desktop adapter so shared app logic does not need to
+    /// implement tray creation, Dock attachment, or taskbar icon updates.
+    /// Makes the tray item once "Keep running when the window closes" asks
+    /// for it: only then does it have a window to bring back (#457).
+    fn spawn_desktop_tray_if_wanted(&mut self) {
+        if !self.settings.keep_running_in_background {
+            self.desktop_services.tray_failed = false;
+        }
+        if self.desktop_services.tray_failed
+            || !wants_tray_item(
+                self.desktop_services.tray_allowed,
+                self.settings.keep_running_in_background,
+                self.desktop_services.tray.is_some(),
+            )
+        {
+            return;
+        }
+        let waker = self.waker.clone();
+        self.desktop_services.tray =
+            fastframe_tray::Tray::spawn(tray_config(self.tray_lockable), move || waker.wake());
+        // No session bus, say: asked again only if the setting is turned
+        // back on, not on every frame.
+        self.desktop_services.tray_failed = self.desktop_services.tray.is_none();
+        self.desktop_services.tray_badge = 0;
+        self.desktop_services.tray_colour_checked = None;
+    }
+
+    /// Offers "Lock ZapFast" in the tray exactly while an app lock password
+    /// is set, so setting or removing one changes the menu at once, and
+    /// makes the item when the setting that wants it is turned on.
+    fn sync_desktop_tray(&mut self) {
+        if self.desktop_services.tray.is_none() {
+            self.spawn_desktop_tray_if_wanted();
+            if !self.window_hidden
+                && let Some(tray) = &mut self.desktop_services.tray
+            {
+                // Makes the macOS item, which needs a running window.
+                tray.attach();
+            }
+        }
+        let lockable = self.settings.app_lock_hash.is_some();
+        if lockable != self.tray_lockable {
+            self.tray_lockable = lockable;
+            if let Some(tray) = &mut self.desktop_services.tray {
+                tray.set_visible(TRAY_LOCK, lockable);
+            }
+        }
+        self.sync_desktop_tray_colour(Instant::now());
+        // The same count as the taskbar's; a new icon only when it shows.
+        let count = self.unread_chat_count_everywhere();
+        let level = crate::util::tray_badge_level(count);
+        if level != self.desktop_services.tray_badge
+            && let Some(tray) = &mut self.desktop_services.tray
+        {
+            let (icon, template) = crate::util::tray_icons(count);
+            tray.set_icon(icon, Some(template));
+            self.desktop_services.tray_badge = level;
+        }
+    }
+
+    /// Keeps the tray icon monochrome against the panel, as the macOS menu
+    /// bar does by itself (#518). Windows has no signal without a window, so
+    /// this asks every few seconds.
+    fn sync_tray_colour(&mut self, now: Instant) {
+        if self
+            .desktop_services.tray_colour_checked
+            .is_some_and(|checked| now.duration_since(checked) < TRAY_COLOUR_EVERY)
+        {
+            return;
+        }
+        self.desktop_services.tray_colour_checked = Some(now);
+        let colour = tray_colour(self.panel_is_dark());
+        if let Some(tray) = &mut self.desktop_services.tray {
+            tray.set_icon_colour(colour);
+        }
+    }
+
+    /// Whether the desktop's panel is dark, where that can be known. GNOME's
+    /// top bar is dark in light mode too; other Linux panels follow the
+    /// desktop's colour scheme.
+    #[cfg(target_os = "linux")]
+    fn panel_is_dark(&self) -> Option<bool> {
+        if fastframe_desktop::is_gnome() {
+            return Some(true);
+        }
+        self.desktop_services.system_appearance.as_ref()?.dark()
+    }
+
+    /// Whether the taskbar is dark, which Windows sets apart from the apps'
+    /// light or dark mode.
+    #[cfg(windows)]
+    fn panel_is_dark(&self) -> Option<bool> {
+        crate::util::windows_taskbar_dark()
+    }
+
+    /// The macOS menu bar recolours its template icon by itself.
+    #[cfg(not(any(target_os = "linux", windows)))]
+    fn panel_is_dark(&self) -> Option<bool> {
+        None
+    }
+
