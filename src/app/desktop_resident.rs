@@ -8,7 +8,10 @@ use std::time::{Duration, Instant};
 
 use crate::backend::{Command, Waker};
 
-use super::{hyprland, App, AppOptions, TRAY_WAIT};
+use super::{
+    hyprland, tray_colour, tray_config, wants_tray_item, App, AppOptions, TRAY_COLOUR_EVERY,
+    TRAY_LOCK, TRAY_WAIT,
+};
 
 
 impl App {
@@ -144,61 +147,7 @@ impl App {
 
 /// The app outlives its window: closing it with "keep running" on hides
 /// ZapFast, and the tray, a notification or another launch brings it back.
-impl fastframe_shell::Resident for App {
-    fn closed(&self) -> fastframe_shell::Closed {
-        if self.quit_requested {
-            fastframe_shell::Closed::Quit
-        } else if self.reopen {
-            // The window was closed only to make a fresh one, which is how a
-            // Wayland session brings a minimized or covered window forward.
-            fastframe_shell::Closed::Reopen
-        } else if self.hide_intent {
-            fastframe_shell::Closed::Hide
-        } else {
-            fastframe_shell::Closed::Quit
-        }
-    }
-
-    fn window_gone(&mut self) {
-        App::window_gone(self);
-    }
-
-    fn headless_frame(&mut self, ctx: &egui::Context) -> fastframe_shell::Headless {
-        self.background_frame(ctx);
-        self.check_tray_wait(Instant::now());
-        if self.quit_requested {
-            fastframe_shell::Headless::Quit
-        } else if self.wants_show {
-            fastframe_shell::Headless::Show
-        } else {
-            fastframe_shell::Headless::Wait
-        }
-    }
-
-    /// Without a tray there is no way back to a hidden window, so show it.
-    /// A tray item no panel shows yet may only be early: a start at login
-    /// can beat the desktop's tray watcher (GNOME's AppIndicator extension
-    /// loads after the session's autostart apps), so the window waits
-    /// `TRAY_WAIT` for a panel before it shows.
-    fn start_hidden(&mut self) -> bool {
-        if !self.has_tray() || !self.settings.keep_running_in_background {
-            return false;
-        }
-        if !self.tray_shown() {
-            self.tray_wait = Some(Instant::now() + TRAY_WAIT);
-        }
-        App::start_hidden(self);
-        true
-    }
-
-    fn shutdown(&mut self) {
-        App::shutdown(self);
-    }
-}
-
-
-
-    /// Starts or synchronizes the desktop tray and its menu-bar appearance.
+/// Starts or synchronizes the desktop tray and its menu-bar appearance.
     ///
     /// Kept in the desktop adapter so shared app logic does not need to
     /// implement tray creation, Dock attachment, or taskbar icon updates.
@@ -263,7 +212,7 @@ impl fastframe_shell::Resident for App {
     /// Keeps the tray icon monochrome against the panel, as the macOS menu
     /// bar does by itself (#518). Windows has no signal without a window, so
     /// this asks every few seconds.
-    fn sync_tray_colour(&mut self, now: Instant) {
+    fn sync_desktop_tray_colour(&mut self, now: Instant) {
         if self
             .desktop_services.tray_colour_checked
             .is_some_and(|checked| now.duration_since(checked) < TRAY_COLOUR_EVERY)
@@ -301,3 +250,54 @@ impl fastframe_shell::Resident for App {
         None
     }
 
+impl fastframe_shell::Resident for App {
+    fn closed(&self) -> fastframe_shell::Closed {
+        if self.quit_requested {
+            fastframe_shell::Closed::Quit
+        } else if self.reopen {
+            // The window was closed only to make a fresh one, which is how a
+            // Wayland session brings a minimized or covered window forward.
+            fastframe_shell::Closed::Reopen
+        } else if self.hide_intent {
+            fastframe_shell::Closed::Hide
+        } else {
+            fastframe_shell::Closed::Quit
+        }
+    }
+
+    fn window_gone(&mut self) {
+        App::window_gone(self);
+    }
+
+    fn headless_frame(&mut self, ctx: &egui::Context) -> fastframe_shell::Headless {
+        self.background_frame(ctx);
+        self.check_tray_wait(Instant::now());
+        if self.quit_requested {
+            fastframe_shell::Headless::Quit
+        } else if self.wants_show {
+            fastframe_shell::Headless::Show
+        } else {
+            fastframe_shell::Headless::Wait
+        }
+    }
+
+    /// Without a tray there is no way back to a hidden window, so show it.
+    /// A tray item no panel shows yet may only be early: a start at login
+    /// can beat the desktop's tray watcher (GNOME's AppIndicator extension
+    /// loads after the session's autostart apps), so the window waits
+    /// `TRAY_WAIT` for a panel before it shows.
+    fn start_hidden(&mut self) -> bool {
+        if !self.has_tray() || !self.settings.keep_running_in_background {
+            return false;
+        }
+        if !self.tray_shown() {
+            self.tray_wait = Some(Instant::now() + TRAY_WAIT);
+        }
+        App::start_hidden(self);
+        true
+    }
+
+    fn shutdown(&mut self) {
+        App::shutdown(self);
+    }
+}
