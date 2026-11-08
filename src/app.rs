@@ -10423,6 +10423,7 @@ impl App {
         self.sync_prefetch();
         self.hold_media();
         self.follow_receipts();
+        self.sync_badge();
         self.request_attention(ctx);
     }
 
