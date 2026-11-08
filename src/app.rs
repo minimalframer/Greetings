@@ -2478,7 +2478,7 @@ impl App {
 
     /// Sends a desktop notification for an unseen incoming message.
     fn maybe_notify(&mut self, chat_id: &str, message: &Message) {
-        if !self.account().settings.notifications || self.power.conditions().display_off {
+        if !self.account().settings.notifications || self.desktop_display_off() {
             return;
         }
         let Some(chat) = self.chat(chat_id) else {
@@ -10379,7 +10379,7 @@ impl App {
     /// phone keeps its notifications while they are not.
     fn report_presence(&mut self) {
         let looking =
-            self.window_focused && !self.window_hidden && !self.power.conditions().display_off;
+            self.window_focused && !self.window_hidden && !self.desktop_display_off();
         let active = self.active;
         for (index, account) in self.accounts.iter_mut().enumerate() {
             let online = looking && index == active;
