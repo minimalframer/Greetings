@@ -10431,27 +10431,7 @@ impl App {
     /// after a wake (Linux and Windows report it; macOS does not yet, so
     /// there the worker's link watch notices the sleep on its own). Settings
     /// waiting for their debounced save are saved before the machine sleeps
-    /// or the session ends.
-    fn handle_power(&mut self) {
-        for event in self.power.events() {
-            match event {
-                fastframe_power::Event::Suspending(ack)
-                | fastframe_power::Event::EndingSession(ack) => {
-                    self.save_state();
-                    // Within the time the system waits for the app.
-                    self.files.flush(Duration::from_millis(1500));
-                    ack.done();
-                }
-                fastframe_power::Event::Resumed => {
-                    for account in &self.accounts {
-                        account.backend.send(Command::Resumed);
-                    }
-                }
-            }
-        }
-    }
-
-    /// [`Self::request_attention`] on a desktop that marks no taskbar entry
+    /// or the session ends.    /// [`Self::request_attention`] on a desktop that marks no taskbar entry
     /// for the request (`skip`) or one that does. GNOME shows its own "is
     /// ready" notice instead (#466), and Hyprland focuses the window when
     /// `misc:focus_on_activate` is on (#530).
@@ -10469,28 +10449,7 @@ impl App {
         }
     }
 
-    /// Collects a finished read or change of the login item.
-    fn tick_login_item(&mut self) {
-        let Some(outcome) = self.login_item.poll() else {
-            return;
-        };
-        match outcome.state {
-            Ok(state) => {
-                self.start_with_system = crate::autostart::switch(state);
-                if outcome.changed && matches!(state, fastframe_autostart::State::NeedsApproval(_))
-                {
-                    self.toast("Allow ZapFast in System Settings, under Login Items.");
-                }
-            }
-            Err(error) => {
-                if outcome.changed {
-                    self.toast_error(format!("Could not change the login item: {error}"));
-                }
-            }
-        }
-    }
-
-    /// Collects a finished password check, and locks once ZapFast has gone
+    /// Collects a finished read or change of the login item.    /// Collects a finished password check, and locks once ZapFast has gone
     /// unused for the chosen time. Inactivity counts while the window is
     /// hidden too: only input in the window restarts it.
     fn tick_app_lock(&mut self, ctx: &egui::Context) {
