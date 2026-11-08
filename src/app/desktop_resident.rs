@@ -4,7 +4,9 @@
 //! still compiled for the desktop build; a later platform split can gate this
 //! module and replace it with an Android lifecycle host.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+use crate::backend::Command;
 
 use super::{hyprland, App, TRAY_WAIT};
 
