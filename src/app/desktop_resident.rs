@@ -8,6 +8,24 @@ use std::time::Instant;
 
 use super::{App, TRAY_WAIT};
 
+
+impl App {
+    /// Runs integrations owned by the desktop host, outside shared frame work.
+    ///
+    /// Keeping these calls together gives the Android host a clear exclusion
+    /// boundary without changing the app's underlying service fields yet.
+    pub(super) fn handle_desktop_frame(&mut self) {
+        self.tick_login_item();
+        self.handle_power();
+        self.handle_tray();
+        #[cfg(target_os = "macos")]
+        self.actions.extend(crate::macos::drain(self.window_hidden));
+        self.handle_control_commands();
+        self.poll_custom_themes();
+        self.sync_badge();
+    }
+}
+
 /// The app outlives its window: closing it with "keep running" on hides
 /// ZapFast, and the tray, a notification or another launch brings it back.
 impl fastframe_shell::Resident for App {
