@@ -48,7 +48,7 @@ impl App {
             }));
         }
         self.desktop_services.tray_allowed = options.tray;
-        self.spawn_tray_if_wanted();
+        self.spawn_desktop_tray_if_wanted();
         if cfg!(target_os = "macos") && options.tray {
             let dock_waker = waker.clone();
             self.desktop_services.dock = Some(fastframe_tray::Dock::spawn(move || dock_waker.wake()));
