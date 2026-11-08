@@ -12,6 +12,14 @@ use super::{hyprland, App, TRAY_WAIT};
 
 
 impl App {
+    /// Reports whether the desktop says the display is off.
+    ///
+    /// Shared notification and presence logic consumes this narrow signal
+    /// rather than depending directly on the desktop power service.
+    pub(super) fn desktop_display_off(&self) -> bool {
+        self.power.conditions().display_off
+    }
+
     /// Highlights the taskbar entry for a message that notified while the
     /// window is open behind others, as KDE Plasma's task manager shows for
     /// chat apps. The desktop clears it once the window is focused. Linux
