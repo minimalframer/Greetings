@@ -10,6 +10,21 @@ use super::{App, TRAY_WAIT};
 
 
 impl App {
+    /// Highlights the taskbar entry for a message that notified while the
+    /// window is open behind others, as KDE Plasma's task manager shows for
+    /// chat apps. The desktop clears it once the window is focused. Linux
+    /// only: elsewhere it would bounce the Dock or flash the taskbar. Asks the
+    /// viewport too, since `window_focused` stays false behind the app lock
+    /// even while the lock screen has the focus.
+    pub(super) fn request_attention(&mut self, ctx: &egui::Context) {
+        let skip = fastframe_desktop::is_gnome()
+            || hyprland(
+                std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some(),
+                std::env::var("XDG_CURRENT_DESKTOP").ok().as_deref(),
+            );
+        self.request_attention_on(ctx, skip);
+    }
+
     /// Runs integrations owned by the desktop host, outside shared frame work.
     ///
     /// Keeping these calls together gives the Android host a clear exclusion
