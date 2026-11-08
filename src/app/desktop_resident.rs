@@ -22,7 +22,7 @@ impl App {
     pub(super) fn initialize_desktop_services(&mut self, waker: &Waker, options: AppOptions) {
         self.pauses_media = true;
         self.call_tones = crate::call_tones::Tones::new(true);
-        self.badge = Some(crate::notify::Badge::new(fastframe_desktop::desktop_entry(
+        self.desktop_services.badge = Some(crate::notify::Badge::new(fastframe_desktop::desktop_entry(
             "zapfast",
         )));
         self.custom_themes
@@ -40,15 +40,15 @@ impl App {
         #[cfg(target_os = "linux")]
         {
             let appearance_waker = waker.clone();
-            self.system_appearance = Some(crate::appearance::SystemAppearance::spawn(move || {
+            self.desktop_services.system_appearance = Some(crate::appearance::SystemAppearance::spawn(move || {
                 appearance_waker.wake()
             }));
         }
-        self.tray_allowed = options.tray;
+        self.desktop_services.tray_allowed = options.tray;
         self.spawn_tray_if_wanted();
         if cfg!(target_os = "macos") && options.tray {
             let dock_waker = waker.clone();
-            self.dock = Some(fastframe_tray::Dock::spawn(move || dock_waker.wake()));
+            self.desktop_services.dock = Some(fastframe_tray::Dock::spawn(move || dock_waker.wake()));
         }
         // The clock preference may wait on the desktop portal on Linux; keep
         // it off the first frame.

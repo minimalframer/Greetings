@@ -912,26 +912,12 @@ pub struct App {
     desktop_services: desktop_services::DesktopServices,
     /// Cross-thread window repaint handle.
     waker: Waker,
-    tray: Option<fastframe_tray::Tray>,
-    /// Whether this run may have a tray item at all (`AppOptions::tray`).
-    tray_allowed: bool,
-    /// The tray item could not be made while the setting wants one.
-    tray_failed: bool,
     /// Dock clicks on macOS, which bring a closed window back with or without
-    /// a menu-bar item. `None` elsewhere, and in tests and demos.
-    dock: Option<fastframe_tray::Dock>,
-    /// The unread level the tray icon shows (`util::tray_badge_level`).
-    tray_badge: u32,
     /// A new window asks for the focus with its first frame.
     wants_focus: bool,
     /// When the wheel last switched account.
     account_wheeled: Option<Instant>,
-    /// When the panel's light or dark style was last read.
-    tray_colour_checked: Option<Instant>,
     /// The desktop portal's light or dark preference, which winit does not
-    /// report on Linux. Tests and demo runs read none.
-    #[cfg(target_os = "linux")]
-    system_appearance: Option<crate::appearance::SystemAppearance>,
     /// Stands in for whether a panel shows the tray item, which tests cannot
     /// spawn.
     #[cfg(test)]
@@ -971,8 +957,6 @@ pub struct App {
     notification_opens: std::sync::Arc<std::sync::Mutex<Vec<crate::notify::NotificationTarget>>>,
     notifications: crate::notify::Notifications,
     /// Unread count on the taskbar icon, where the desktop reads it. `None`
-    /// for demo and test runs, which must not touch the real taskbar.
-    badge: Option<crate::notify::Badge>,
     /// The app lock: whether the window shows only the lock screen, the
     /// inactivity count, and the Settings password form.
     pub app_lock: crate::app_lock::AppLock,
@@ -1415,7 +1399,7 @@ impl App {
         self.hide_intent = true;
         // No window will attach the tray, which makes the macOS item; make
         // it now without bringing ZapFast forward.
-        if let Some(tray) = &mut self.tray {
+        if let Some(tray) = &mut self.desktop_services.tray {
             tray.create_item();
         }
         for account in &mut self.accounts {
@@ -1682,16 +1666,9 @@ impl App {
             start_with_system: None,
             desktop_services: desktop_services::DesktopServices::default(),
             waker,
-            tray: None,
-            tray_allowed: false,
-            tray_failed: false,
-            dock: None,
-            tray_badge: 0,
             wants_focus: false,
             account_wheeled: None,
-            tray_colour_checked: None,
             #[cfg(target_os = "linux")]
-            system_appearance: None,
             #[cfg(test)]
             test_tray_shown: None,
             #[cfg(test)]
@@ -1709,7 +1686,6 @@ impl App {
             control_commands: None,
             notification_opens: Default::default(),
             notifications: Default::default(),
-            badge: None,
             app_lock,
             announcer: Default::default(),
             announced_offline: false,
@@ -2131,7 +2107,7 @@ impl App {
     /// Whether closing the window keeps ZapFast running, hidden.
     pub fn keeps_running_on_close(&self) -> bool {
         closing_keeps_running(
-            self.dock.is_some(),
+            self.desktop_services.dock.is_some(),
             self.tray_shown(),
             self.settings.keep_running_in_background,
         )
@@ -2155,7 +2131,7 @@ impl App {
         if let Some(shown) = self.test_tray_shown {
             return shown;
         }
-        self.tray
+        self.desktop_services.tray
             .as_ref()
             .is_some_and(fastframe_tray::Tray::is_shown)
     }
@@ -2166,7 +2142,7 @@ impl App {
         if self.test_tray_shown.is_some() {
             return true;
         }
-        self.tray.is_some()
+        self.desktop_services.tray.is_some()
     }
 
     /// Ends a hidden start's wait for a panel: a panel showing the tray item
@@ -2189,7 +2165,7 @@ impl App {
         self.sync_tray();
         let hidden = self.window_hidden;
         // A Dock click on macOS only ever shows the window.
-        if let Some(dock) = &self.dock {
+        if let Some(dock) = &self.desktop_services.dock {
             let events = dock.events();
             self.actions.extend(
                 events
@@ -2197,7 +2173,7 @@ impl App {
                     .filter_map(|event| tray_action(event, hidden)),
             );
         }
-        let Some(events) = self.tray.as_ref().map(fastframe_tray::Tray::events) else {
+        let Some(events) = self.desktop_services.tray.as_ref().map(fastframe_tray::Tray::events) else {
             return;
         };
         for event in events {
@@ -2248,35 +2224,35 @@ impl App {
     /// for it: only then does it have a window to bring back (#457).
     fn spawn_tray_if_wanted(&mut self) {
         if !self.settings.keep_running_in_background {
-            self.tray_failed = false;
+            self.desktop_services.tray_failed = false;
         }
-        if self.tray_failed
+        if self.desktop_services.tray_failed
             || !wants_tray_item(
-                self.tray_allowed,
+                self.desktop_services.tray_allowed,
                 self.settings.keep_running_in_background,
-                self.tray.is_some(),
+                self.desktop_services.tray.is_some(),
             )
         {
             return;
         }
         let waker = self.waker.clone();
-        self.tray =
+        self.desktop_services.tray =
             fastframe_tray::Tray::spawn(tray_config(self.tray_lockable), move || waker.wake());
         // No session bus, say: asked again only if the setting is turned
         // back on, not on every frame.
-        self.tray_failed = self.tray.is_none();
-        self.tray_badge = 0;
-        self.tray_colour_checked = None;
+        self.desktop_services.tray_failed = self.desktop_services.tray.is_none();
+        self.desktop_services.tray_badge = 0;
+        self.desktop_services.tray_colour_checked = None;
     }
 
     /// Offers "Lock ZapFast" in the tray exactly while an app lock password
     /// is set, so setting or removing one changes the menu at once, and
     /// makes the item when the setting that wants it is turned on.
     fn sync_tray(&mut self) {
-        if self.tray.is_none() {
+        if self.desktop_services.tray.is_none() {
             self.spawn_tray_if_wanted();
             if !self.window_hidden
-                && let Some(tray) = &mut self.tray
+                && let Some(tray) = &mut self.desktop_services.tray
             {
                 // Makes the macOS item, which needs a running window.
                 tray.attach();
@@ -2285,7 +2261,7 @@ impl App {
         let lockable = self.settings.app_lock_hash.is_some();
         if lockable != self.tray_lockable {
             self.tray_lockable = lockable;
-            if let Some(tray) = &mut self.tray {
+            if let Some(tray) = &mut self.desktop_services.tray {
                 tray.set_visible(TRAY_LOCK, lockable);
             }
         }
@@ -2293,12 +2269,12 @@ impl App {
         // The same count as the taskbar's; a new icon only when it shows.
         let count = self.unread_chat_count_everywhere();
         let level = crate::util::tray_badge_level(count);
-        if level != self.tray_badge
-            && let Some(tray) = &mut self.tray
+        if level != self.desktop_services.tray_badge
+            && let Some(tray) = &mut self.desktop_services.tray
         {
             let (icon, template) = crate::util::tray_icons(count);
             tray.set_icon(icon, Some(template));
-            self.tray_badge = level;
+            self.desktop_services.tray_badge = level;
         }
     }
 
@@ -2312,9 +2288,9 @@ impl App {
         {
             return;
         }
-        self.tray_colour_checked = Some(now);
+        self.desktop_services.tray_colour_checked = Some(now);
         let colour = tray_colour(self.panel_is_dark());
-        if let Some(tray) = &mut self.tray {
+        if let Some(tray) = &mut self.desktop_services.tray {
             tray.set_icon_colour(colour);
         }
     }
@@ -2327,7 +2303,7 @@ impl App {
         if fastframe_desktop::is_gnome() {
             return Some(true);
         }
-        self.system_appearance.as_ref()?.dark()
+        self.desktop_services.system_appearance.as_ref()?.dark()
     }
 
     /// Whether the taskbar is dark, which Windows sets apart from the apps'
@@ -2658,10 +2634,10 @@ impl App {
         crate::macos::attach(ctx);
         // The Dock first: on the first window the tray's item takes the
         // Dock's clicks over, and both are read.
-        if let Some(dock) = &mut self.dock {
+        if let Some(dock) = &mut self.desktop_services.dock {
             dock.attach();
         }
-        if let Some(tray) = &mut self.tray {
+        if let Some(tray) = &mut self.desktop_services.tray {
             tray.attach();
         }
     }
@@ -10569,7 +10545,7 @@ impl App {
     /// reads it. The badge ignores repeats, so calling this each frame is cheap.
     fn sync_badge(&mut self) {
         let count = self.unread_chat_count_everywhere();
-        if let Some(badge) = &mut self.badge {
+        if let Some(badge) = &mut self.desktop_services.badge {
             badge.set(count);
         }
     }
@@ -10578,7 +10554,7 @@ impl App {
     /// applies itself; `None` in demo and test runs.
     #[cfg(target_os = "windows")]
     pub fn taskbar_badge_count(&self) -> Option<u32> {
-        self.badge.as_ref()?.count()
+        self.desktop_services.badge.as_ref()?.count()
     }
 
     /// Pauses other apps' music while recording or playing audio, as the
@@ -15630,7 +15606,7 @@ mod tests {
     #[test]
     fn demo_and_test_runs_do_not_publish_a_taskbar_badge() {
         let app = app();
-        assert!(app.badge.is_none());
+        assert!(app.desktop_services.badge.is_none());
         #[cfg(target_os = "windows")]
         assert!(app.taskbar_badge_count().is_none());
     }
@@ -17846,7 +17822,7 @@ mod tests {
         assert_eq!(app.headless_frame(&ctx), Headless::Quit);
 
         let mut app = self::app();
-        assert!(app.tray.is_none());
+        assert!(app.desktop_services.tray.is_none());
         assert!(!Resident::start_hidden(&mut app), "no tray, no way back");
         assert!(!app.hide_intent);
     }
@@ -17889,7 +17865,7 @@ mod tests {
         use fastframe_shell::{Closed, Resident};
         let ctx = egui::Context::default();
         let mut app = app();
-        app.dock = Some(fastframe_tray::Dock::spawn(|| {}));
+        app.desktop_services.dock = Some(fastframe_tray::Dock::spawn(|| {}));
         app.settings.keep_running_in_background = false;
         app.test_tray_shown = Some(false);
         let mut input = egui::RawInput::default();
@@ -18748,12 +18724,12 @@ mod tests {
         let ctx = egui::Context::default();
         app.settings.theme = ThemeChoice::System;
         assert!(app.settings.cached_palette().is_none());
-        app.system_appearance = Some(crate::appearance::SystemAppearance::fixed(false));
+        app.desktop_services.system_appearance = Some(crate::appearance::SystemAppearance::fixed(false));
         app.apply_theme(&ctx);
         assert_eq!(ctx.theme(), egui::Theme::Light);
         assert_eq!(app.palette, Palette::light());
 
-        app.system_appearance = Some(crate::appearance::SystemAppearance::fixed(true));
+        app.desktop_services.system_appearance = Some(crate::appearance::SystemAppearance::fixed(true));
         app.apply_theme(&ctx);
         assert_eq!(ctx.theme(), egui::Theme::Dark);
         assert_eq!(app.palette, Palette::dark());
